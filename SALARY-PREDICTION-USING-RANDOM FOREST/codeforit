@@ -1,0 +1,147 @@
+"""Project Overview
+Business Objective:
+To ensure there is no discrimination between employees, Company X seeks to
+automate salary decisions by using historical hiring data. The aim is to build a
+ model that predicts the salary to be offered to a candidate based on objective
+ features like experience, education, certifications, and more, thereby
+ minimizing manual judgment and promoting fairness.
+ """
+import numpy as np
+import pandas as pd
+import seaborn as sns
+from sklearn import metrics
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_squared_error
+import matplotlib.pyplot as plt
+import matplotlib.style
+#1.loading the data
+df=pd.read_csv("/content/expected_ctc.csv")
+#analyzing the data for the columns
+df.head()
+
+#analyzing the datatypes of the column
+df.info()
+
+#analyzing the cout of rows and columns
+df.shape
+
+#2.checking for missing data
+df.isna().sum()
+
+df["Current_CTC"].describe()
+
+#seperating departments and currentctc
+department = df["Department"]
+current_ctc = df["Current_CTC"]
+
+dup=df.duplicated()
+print((dup.sum()))
+#finding duplicate columns
+
+#checking outliers
+cont = df.select_dtypes(include=['number']).columns
+plt.figure(figsize=(10, 10))
+df[cont].boxplot(vert=False)
+plt.title('With Outliers', fontsize=16)
+plt.show()
+
+#fixing outliers
+def remove_outlier(col):
+    sorted(col)
+    Q1,Q3=np.percentile(col,[25,75])
+    IQR=Q3-Q1
+    lr= Q1-(1.5 * IQR)
+    ur= Q3+(1.5 * IQR)
+    return lr, ur
+
+for column in df[cont].columns:
+    lr,ur=remove_outlier(df[column])
+    df[column]=np.where(df[column]>ur,ur,df[column])
+    df[column]=np.where(df[column]<lr,lr,df[column])
+
+#after removing outliers
+plt.figure(figsize=(10,10))
+df[cont].boxplot(vert=False)
+plt.title('After Outlier Removal',fontsize=16)
+plt.show()
+
+#comparing the department and its salaries
+plt.style.use('dark_background')
+bar1=df.groupby("Department")["Current_CTC"].mean().sort_values(ascending=False)
+plt.figure(figsize=(6,6))
+plt.bar(bar1.index, bar1.values, color='cyan')
+plt.title("Average Current CTC by Department", fontsize=16)
+plt.xlabel("Department", fontsize=12)
+plt.ylabel("Average Current CTC", fontsize=12)
+plt.xticks(rotation=45, ha='right')
+plt.tight_layout()
+plt.show()
+
+#3.handling missing data
+#fill missing numeric values with mean
+for col in df.columns:
+    if df[col].dtype != 'object':
+        df[col] = df[col].fillna(df[col].mean())
+for col in df.select_dtypes(include='object').columns:
+    df[col] = df[col].fillna('Unknown')
+for col in df.select_dtypes(include='object').columns:
+    df[col] = df[col].astype('category').cat.codes
+#filled missing categoriacal values with numeric values with assigning each unique
+# element to a number
+
+""" I am going to use Random Forest method because it has high accuracy,helps to prevent overfitting
+    and are relatively robust to outliers
+    Salary decisions are often based on complex, non-linear combinations of features
+
+    Random Forest can capture complex, non-linear interactions between these variables without requiring
+    manual feature engineering.
+
+    Random Forest can model these interactions automatically because it builds many decision trees that
+    capture different splits in the data.
+
+    This results in high generalization accuracy
+"""
+
+#4.Training and testing
+X = df.drop(columns=['Expected_CTC'])
+Y = df['Expected_CTC']
+#classifying the 75% of the dataset to traing set and rest 25% for test set
+X_train, X_test, train_labels, test_labels = train_test_split(X, Y, test_size=0.25, random_state=42)
+rf = RandomForestRegressor(n_estimators=100, random_state=42)
+rf.fit(X_train, train_labels)
+Y_pred = rf.predict(X_test)
+rmse = np.sqrt(mean_squared_error(test_labels, Y_pred))
+print(f"Random Forest RMSE: {rmse:,.2f}")
+
+
+meanexpctc=df['Expected_CTC'].mean()
+print(meanexpctc)
+
+#5.Evaluation
+#comparing rmse and expectedctc
+percentage=(rmse/meanexpctc)*100
+print(percentage)
+
+#comparing the predictions and testing data
+plt.figure(figsize=(8, 6))
+plt.scatter(test_labels, Y_pred, alpha=0.5, color='green')
+plt.plot([test_labels.min(), test_labels.max()],[test_labels.min(), test_labels.max()], 'r--', lw=2)
+#constructed a red line for the actual salaries
+#this scatter plot explains actual salaries and the predicted salaries.
+plt.xlabel('Actual Salary')
+plt.ylabel('Predicted Salary')
+plt.title('Actual vs Predicted Salary Scatter Plot')
+plt.grid(True)
+plt.show()
+
+
+"""The model have a rmse of  against a mean salary of 2,250,154, indicating a relative error of around 1%.
+
+  The goal of this project was to develop a machine learning model that predicts the salary to be offered to a candidate based on their profile,
+   using historical data.
+  This approach aims to reduce manual judgment and ensure fairness by providing consistent salary offers for employees with similar profiles.
+
+  By using the Random Forest regression algorithm, the model achieved an exceptionally low error rate of approximately 1%,
+   meaning its predicted salaries are very close to the actual salaries.
+   This shows the model is accurate and can be trusted to help decide fair salaries.
+"""
