@@ -6,11 +6,6 @@ require('dotenv').config();
 const app = express();
 
 app.use(cors());
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  next();
-});
-
 
 const token = process.env.BEARER_TOKEN;
 const endpointURL = "https://api.twitter.com/2/users/by?usernames="
@@ -34,9 +29,11 @@ async function getRequest() {
         
         // FIX: Replaced deprecated 'request.post' with 'needle.post'
         const formData = { "heelo": "okay" };
+        
+        // CHANGE 2: Proper Error aur Status Code handling add kar di gayi hai
         needle.post('http://localhost:8000/scoreJson', formData, { multipart: true }, function(err, httpResponse, body) {
-            if (err) {
-              return console.error("8000 Fail");
+            if (err || (httpResponse && httpResponse.statusCode !== 200)) {
+              return console.error("8000 Fail. Status:", httpResponse ? httpResponse.statusCode : "Network Error", err || "");
             }
             console.log("8000 Pass" , body);
         });
