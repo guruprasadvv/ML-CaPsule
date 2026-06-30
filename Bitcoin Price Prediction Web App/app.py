@@ -93,3 +93,33 @@ if r == "Bitcoin Price Prediction":
         )
 
         st.balloons()
+from sklearn.linear_model import Lasso
+Ls=Lasso()
+xtrain,xtest,ytrain,ytest=train_test_split(X,Y,test_size=0.2)
+Ls.fit(xtrain,ytrain)
+
+if r=='Bitcoin Price':
+    st.header("Know the Price of Bitcoin")
+    High=st.number_input("Highest Price of bitcoin")
+    Low=st.number_input("Lowest Price of")
+    Open=st.number_input("Opening Price of bitcoin")
+    Close=st.number_input("Closing Price of Bitcoin")
+    volume=st.number_input("Volume of the bitcoin")
+    
+    ypred=Ls.predict([[High,Low,Open,Close,volume]])
+    if(st.button("Predict")):
+        st.success(f"Your Predicted Bitcoin Marketcap Is ${abs(ypred[0]):,.2f}")
+        
+
+    
+    
+
+        
+        
+
+   
+    
+
+    
+    
+    
