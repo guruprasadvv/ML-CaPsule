@@ -1,5 +1,5 @@
 # This workflow integrates Scan with GitHub's code scanning feature
-# Scan is a free open-source security tool for modern DevOps teams from ShiftLeft
+# Scan is a free open-source security tool from ShiftLeft
 # Visit https://slscan.io/en/latest/integrations/code-scan for help
 name: SL Scan
 
@@ -11,32 +11,52 @@ on:
     branches: [ master ]
   schedule:
     - cron: '23 16 * * 1'
+  workflow_dispatch:
+
+# Only one scan per branch at a time; a newer push cancels the older run.
+concurrency:
+  group: sl-scan-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   Scan-Build:
-    # Scan runs on ubuntu, mac and windows
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Uploading SARIF to the Security tab needs explicit write access to
+    # security events; without it the upload fails with
+    # "Resource not accessible by integration".
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
     steps:
     - uses: actions/checkout@v4
-    # Instructions
-    # 1. Setup JDK, Node.js, Python etc depending on your project type
-    # 2. Compile or build the project before invoking scan
-    #    Example: mvn compile, or npm install or pip install goes here
-    # 3. Invoke Scan with the github token. Leave the workspace empty to use relative url
 
     - name: Perform Scan
       uses: ShiftLeftSecurity/scan-action@master
+      # Scan exits non-zero when it finds issues. Findings are reported in the
+      # Security tab via the SARIF upload below, so they should not turn the
+      # whole workflow red.
+      continue-on-error: true
       env:
         WORKSPACE: ""
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        SCAN_AUTO_BUILD: true
+        # Auto-build tried to compile every Java/Node sub-project in this
+        # 160k-file repo and pushed runs to ~1 hour. The repo is almost all
+        # Python notebooks/scripts, which need no build to be scanned.
+        SCAN_AUTO_BUILD: false
       with:
         output: reports
-        # Scan auto-detects the languages in your project. To override uncomment the below variable and set the type
-        # type: credscan,java
-        # type: python
+        # Python is the repo's main language; credscan catches leaked secrets.
+        type: python,credscan
 
     - name: Upload report
-      uses: github/codeql-action/upload-sarif@v1
+      # Run even when the scan step reported findings, but only if it
+      # actually produced SARIF files.
+      if: always() && hashFiles('reports/*.sarif') != ''
+      # v1 of the CodeQL Action was deprecated in January 2023 and no
+      # longer works; v3 is the supported major version.
+      uses: github/codeql-action/upload-sarif@v3
       with:
         sarif_file: reports
+        category: sl-scan
