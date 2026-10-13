@@ -7,26 +7,47 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   test-notebooks:
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 60
+
     steps:
       - uses: actions/checkout@v4
-      
+        with:
+          # Full history is needed to diff against the base branch.
+          fetch-depth: 0
+
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      
+
       - name: Install dependencies
         run: |
-          pip install jupyter nbconvert pandas numpy
+          pip install jupyter nbconvert nbformat pandas numpy
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-      
+
       - name: Get changed notebooks
+        env:
+          # PRs: the PR's target branch. Pushes / manual runs: the repo's default branch.
+          BASE_BRANCH: ${{ github.base_ref || github.event.repository.default_branch }}
+          BEFORE_SHA: ${{ github.event.before }}
         run: |
-              git fetch origin main
-              git diff --name-only origin/main...HEAD > changed_files.txt
+          if [ "${{ github.event_name }}" = "push" ] && [ -n "$BEFORE_SHA" ] \
+             && [ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ] \
+             && git cat-file -e "$BEFORE_SHA" 2>/dev/null; then
+            # Push: compare with the commit before the push.
+            git diff --name-only "$BEFORE_SHA" HEAD > changed_files.txt
+          else
+            git fetch --no-tags origin "$BASE_BRANCH"
+            git diff --name-only "origin/$BASE_BRANCH...HEAD" > changed_files.txt
+          fi
+          echo "Changed files:"
+          cat changed_files.txt
+
       - name: Run notebook health check
         run: python .github/scripts/notebook_health_check.py
